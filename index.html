@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Real-Time Wind Particle Simulation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background-color: #1e3a5f;
+      overflow: hidden;
+    }
+    #map {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+    }
+    /* Transparent canvas overlay */
+    #windCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      z-index: 500;
+      background: transparent;
+    }
+    .header {
+      position: absolute;
+      top: 0;
+      width: 100%;
+      background: rgba(30, 58, 138, 0.8);
+      color: #fff;
+      text-align: center;
+      padding: 10px 0;
+      font-size: 1.5em;
+      z-index: 1000;
+    }
+    .wind-direction {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(30, 58, 138, 0.8);
+      color: #fff;
+      padding: 5px 10px;
+      font-size: 1em;
+      z-index: 1000;
+      border-radius: 4px;
+      font-family: sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">Real-Time Wind Particle Simulation</div>
+  <div id="map"></div>
+  <canvas id="windCanvas"></canvas>
+  <div class="wind-direction" id="windDirection">N/A</div>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      var globalWind = { u: 2, v: 2 };
+
+      var pixelScale = 0.2; // Adjusted for slower movement of particles
+
+      // Convert an angle in degrees (0-360) to a cardinal direction to utulise it properly
+      function getCardinal(angle) {
+        // ensure angle is between 0 and 360 for direction to work peroperly (compass is 0-360)
+        angle = angle % 360;
+        if ((angle >= 337.5 && angle <= 360) || (angle >= 0 && angle < 22.5)) return "N";
+        if (angle >= 22.5 && angle < 67.5) return "NE";
+        if (angle >= 67.5 && angle < 112.5) return "E";
+        if (angle >= 112.5 && angle < 157.5) return "SE";
+        if (angle >= 157.5 && angle < 202.5) return "S";
+        if (angle >= 202.5 && angle < 247.5) return "SW";
+        if (angle >= 247.5 && angle < 292.5) return "W";
+        if (angle >= 292.5 && angle < 337.5) return "NW";
+        return "";
+      }
+
+      function updateWindData() {
+        var url = "https://api.open-meteo.com/v1/forecast?latitude=35.9&longitude=14.5&current_weather=true&windspeed_unit=ms";
+        fetch(url)
+          .then(response => response.json())
+          .then(data => {
+            if (data.current_weather) {
+              var ws = data.current_weather.windspeed;
+              // Use a fallback value if ws is 0.
+              var effectiveSpeed = ws || 0.2;
+              var wd = data.current_weather.winddirection; // wind comes from here
+              var blowingTo = (wd + 180) % 360; // wind blowing-to direction (degrees)
+              var angleRad = blowingTo * Math.PI / 180;
+              globalWind = {
+                u: effectiveSpeed * Math.sin(angleRad),
+                v: effectiveSpeed * Math.cos(angleRad)
+              };
+              console.log("Updated Wind:", globalWind);
+              // Update the display of wind direction.
+              document.getElementById("windDirection").textContent = getCardinal(blowingTo);
+            }
+          })
+          .catch(err => {
+            console.error("Wind API error:", err);
+            // On error, keep fallback wind.
+            globalWind = { u: 2, v: 2 };
+            document.getElementById("windDirection").textContent = getCardinal(180);
+          });
+      }
+      
+      // Initial fetch and update every minute.
+      updateWindData();
+      setInterval(updateWindData, 60 * 1000);
+      
+      // Initialize Leaflet map centered on Malta.
+      var map = L.map('map').setView([35.9, 14.5], 8);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        maxZoom: 19
+      }).addTo(map);
+      
+      // Setup the canvas overlay.
+      var canvas = document.getElementById('windCanvas');
+      var ctx = canvas.getContext('2d');
+      function resizeCanvas() {
+        var size = map.getSize();
+        canvas.width = size.x;
+        canvas.height = size.y;
+      }
+      resizeCanvas();
+      map.on('resize', resizeCanvas);
+      // Reinitialize particles when the map stops moving.
+      map.on('moveend', initParticles);
+      
+      // creates an array of particles with random geographic positions within the current map bounds.
+      var particles = [];
+      var particleCount = 500;
+      function initParticles() {
+        particles = [];
+        var bounds = map.getBounds();
+        for (var i = 0; i < particleCount; i++) {
+          var lat = bounds.getSouth() + Math.random() * (bounds.getNorth() - bounds.getSouth());
+          var lng = bounds.getWest() + Math.random() * (bounds.getEast() - bounds.getWest());
+          particles.push({ lat: lat, lng: lng });
+        }
+      }
+      initParticles();
+
+
+      function animate() {
+        // rempoves particle trails, remvoe this if you want trails
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 1.5;
+        
+        particles.forEach(function(p) {
+          // position to map
+          var currentPoint = map.latLngToContainerPoint([p.lat, p.lng]);
+          var newPoint = L.point(
+            currentPoint.x + globalWind.u * pixelScale,
+            currentPoint.y - globalWind.v * pixelScale
+          );
+          // Convert the new container point back to geographic coordinates.
+          var newLatLng = map.containerPointToLatLng(newPoint);
+          
+          // draw line path of particle
+          ctx.beginPath();
+          ctx.moveTo(currentPoint.x, currentPoint.y);
+          ctx.lineTo(newPoint.x, newPoint.y);
+          ctx.stroke();
+          
+          // update particle geo pos
+          p.lat = newLatLng.lat;
+          p.lng = newLatLng.lng;
+          
+          // reinistialise particle if it's outside the bound map
+          if (!map.getBounds().contains([p.lat, p.lng])) {
+            var bounds = map.getBounds();
+            p.lat = bounds.getSouth() + Math.random() * (bounds.getNorth() - bounds.getSouth());
+            p.lng = bounds.getWest() + Math.random() * (bounds.getEast() - bounds.getWest());
+          }
+        });
+        requestAnimationFrame(animate);
+      }
+      animate();
+    });
+  </script>
+</body>
+</html>
