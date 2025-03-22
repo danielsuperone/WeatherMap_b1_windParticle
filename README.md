@@ -35,10 +35,11 @@ cd your-repo
 ```
 
 - Now simply double click `index.html` and open it in your desired browser!
-  <br><br><br><br>
-
+  <br>
   
-⚙️ How it Works
+---
+  
+## ⚙️ How it Works
 - Fetches windspeed and wind direction
 
 - Calculates wind vector (U, V) components
@@ -52,18 +53,17 @@ cd your-repo
 📌 Screenshot / Demo
 ![Wind Simulation Demo](https://i.imgur.com/vexpWmo.gif)
 
-🗺️ Map Tiles
+## 🗺️ Map Tiles
 Tiles by CARTO
 
 Dark mode tiles for better contrast with particles
 
-📥 API Example
+## 📥 API Example
 Example API call for real-time wind:
 ```bash
 https://api.open-meteo.com/v1/forecast?latitude=35.9&longitude=14.5&current_weather=true&windspeed_unit=ms
 ```
-<br><br>
-✨ Customize
+## ✨ Customize
 ```bash
 Change location (latitude, longitude) in the API URL
 
@@ -72,7 +72,7 @@ Adjust particleCount or pixelScale for different visual effects
 Replace tile layer URL for a different map style
 ```
 
-📄 License
+## 📄 License
 ```bash
 MIT License
 ```
