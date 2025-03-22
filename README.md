@@ -1,4 +1,3 @@
-# WeatherMap_b1_windParticle
 # 🌬️ Real-Time Wind Particle Simulation 🌍
 
 ![Wind Simulation Demo](https://i.imgur.com/vexpWmo.gif)
